@@ -1,0 +1,79 @@
+---
+- name: configure sftp for middleware file transfer
+  hosts: all
+  connection: local
+  sudo: yes
+  vars:
+    - sftp_chroot_dir: "/sftp"
+    - sftp_maxlogins: 20
+    - sftp_allow_passwords: true
+    - sftp_users:
+      - name: all-admin
+        password: "sa5oFLkjD3vQ."
+        authorized: []
+      - name: stg-admin
+        password: "sa5oFLkjD3vQ."
+        authorized: []
+      - name: stg-uploader
+        password: "sa5oFLkjD3vQ."
+        authorized: []
+      - name: dev-admin
+        password: "sa5oFLkjD3vQ."
+        authorized: []
+      - name: dev-uploader
+        password: "sa5oFLkjD3vQ."
+        authorized: []
+      - name: prd-admin
+        password: "sa5oFLkjD3vQ."
+        authorized: []
+      - name: prd-uploader
+        password: "sa5oFLkjD3vQ."
+        authorized: []
+#      - name: duncan
+#        password: ""
+#        authorized: [ssh_users/db]
+    - sftp_directories:
+      - staging
+      - development
+      - production
+  tasks: 
+    - name: install linux ACL
+      sudo: true
+      apt: pkg=acl state=present update_cache=yes
+
+    - name: Ensure fstab uses acl
+      mount:
+        name: "{{ item.mount }}"
+        src: "{{ item.device }}"
+        fstype: "{{ item.fstype }}"
+        opts: "{{ item.options }},acl"
+        state: present
+      with_items: ansible_mounts
+      when: item.mount in ['/', '/home', '/var'] and item.options.find("acl") == -1
+
+#FILE ACLS
+    - name: set ACLs for sftp staging location
+      acl: name="{{ sftp_chroot_dir }}/staging" entity=all-admin etype=user permissions="rwx" state=present
+    - name: set ACLs for sftp staging location
+      acl: name="{{ sftp_chroot_dir }}/staging" entity=stg-admin etype=user permissions="rwx" state=present
+    - name: set ACLs for sftp staging location
+      acl: name="{{ sftp_chroot_dir }}/staging" entity=stg-uploader etype=user permissions="rwx" state=present
+
+    - name: set ACLs for sftp development location
+      acl: name="{{ sftp_chroot_dir }}/development" entity=all-admin etype=user permissions="rwx" state=present
+    - name: set ACLs for sftp development location
+      acl: name="{{ sftp_chroot_dir }}/development" entity=dev-admin etype=user permissions="rwx" state=present
+    - name: set ACLs for sftp development location
+      acl: name="{{ sftp_chroot_dir }}/development" entity=dev-uploader etype=user permissions="rwx" state=present
+
+    - name: set ACLs for sftp production location
+      acl: name="{{ sftp_chroot_dir }}/production" entity=all-admin etype=user permissions="rwx" state=present
+    - name: set ACLs for sftp production location
+      acl: name="{{ sftp_chroot_dir }}/production" entity=prd-admin etype=user permissions="rwx" state=present
+    - name: set ACLs for sftp production location
+      acl: name="{{ sftp_chroot_dir }}/production" entity=prd-uploader etype=user permissions="rwx" state=present
+
+  roles:
+    - ansible-sftp
+
+
