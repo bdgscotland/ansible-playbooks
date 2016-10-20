@@ -1,0 +1,96 @@
+
+- hosts: all
+  sudo: true
+  vars:
+    kernel_version: "4.4.24-1.el7.elrepo"
+#    kernel_version: "4.5.4-1.el7.elrepo"
+
+  tasks:
+## ONLY RUN THIS ON CENTOS SO ADD A CHECK INTO THIS
+
+  - name: Read Kernel Version
+    command: 'uname -r'
+    register: result
+
+  - name: Has kernel upgrade already completed
+    fail: msg="Kernel version already {{ kernel_version }}"
+    when: "'{{ kernel_version }}' in result.stdout"
+
+  - name: Uninstall Existing Kernel Packages
+    yum: pkg={{item}} state=absent disable_gpg_check=yes
+    with_items:
+       - kernel-headers
+       - kernel-tools
+       - kernel-tools-libs
+       - kernel-ml-devel
+       - kernel-ml-tools
+       - kernel-ml-tools-libs
+       - kernel-ml-tools-libs-devel
+
+  - name: Install Kernel Packages
+    yum: pkg={{item}} update_cache=yes state=installed disable_gpg_check=yes
+    with_items:
+       - kernel-lt-{{ kernel_version }}
+       - kernel-lt-devel-{{ kernel_version }}
+       - kernel-lt-headers-{{ kernel_version }}
+       - kernel-lt-tools-{{ kernel_version }}
+       - kernel-lt-tools-libs-{{ kernel_version }}
+       - kernel-lt-tools-libs-devel-{{ kernel_version }}
+
+  - name: Find grub menu item for new kernel
+    shell: grep '^menuentry' /boot/grub2/grub.cfg | nl | grep '.*{{ kernel_version }}' | grep -v 'debugging' | awk '{print $1-1}'
+    register: grubmenuitem
+
+  - name: Print Grub Location
+    debug: var=grubmenuitem.stdout_lines
+
+  - name: Set Boot Time Option for Kernel
+    command: 'grub2-set-default {{ grubmenuitem.stdout_lines | join(" ") }}'
+
+  - name: Change grub default config
+    lineinfile: dest=/etc/default/grub
+                regexp='^GRUB_DEFAULT='
+                state=present
+                line='GRUB_DEFAULT={{ grubmenuitem.stdout_lines | join(" ") }}'
+
+  - name: Change grub2 configs
+    command: "grub2-mkconfig -o /boot/grub2/grub.cfg"
+
+  - name: Read Kernel Version
+    command: 'uname -r'
+    register: result
+    ignore_errors: True
+
+  - name: Print Kernel Version
+    debug: var=result.stdout_lines
+
+  - name: Restart server
+    sudo: true
+    command: "{{ item }}"
+    async: 0
+    poll: 0
+    with_items:
+      - "shutdown -r +1"
+    ignore_errors: true
+
+  - name: Wait for server to reboot
+    wait_for: >
+      host={{ inventory_hostname }}
+      port=20848
+      state=started
+      delay=90
+      timeout={{ 5 * 60 }}
+    delegate_to: localhost
+
+  - name: Read Kernel Version
+    command: 'uname -r'
+    register: result
+    ignore_errors: True
+
+  - name: Print Kernel Version
+    debug: var=result.stdout_lines
+
+  - name: Did kernel upgrade fail
+    fail: msg="Kernel does not match {{ kernel_version }} actual kernel is result.stdout"
+    when: "'{{ kernel_version }}' not in result.stdout"
+
