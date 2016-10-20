@@ -1,0 +1,13 @@
+# This exists due to sometimes the setup module failing, this is a workaround for that problem
+# Be sure to edit ansible.cfg and add fact caching configs
+# 
+#fact_caching = jsonfile
+#fact_caching_connection = /tmp/facts_cache
+#fact_caching_timeout = 7200
+
+- hosts: all
+  sudo: true
+  gather_facts: yes
+  tasks:
+    - name: Ping everything to gather facts
+      ping:
