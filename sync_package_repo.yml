@@ -1,0 +1,52 @@
+- hosts: reposerver
+  sudo: true
+  vars:
+    repolist:
+      - base
+      - extras
+      - updates
+      - jenkins
+      - elrepo
+      - elrepo-kernel
+      - epel
+      - beats
+      - elasticsearch-2.x
+      - kibana-4.5
+      - logstash-2.3
+      - remi
+      - rpmforge
+      - rpmforge-extras
+      - virtualbox
+
+  tasks:
+  - name: Generate repos for CentOS machines
+    copy:
+      content: |
+        [{{ item }}]
+        name={{ item }}
+        baseurl={{ reposerver }}/mirrors/{{ item }}
+        enabled=1
+      dest: /tmp/cent7_{{ item }}.repo
+    with_items: "{{ repolist }}"
+
+  - name: Make directory
+    file: path=/mnt/repos/mirrors/{{ item }} state=directory mode=0777 owner=nginx group=nginx
+    with_items: "{{ repolist }}"
+
+  - name: Sync Repos
+    shell: reposync -n --arch=x86_64 --repoid={{ item }} chdir=/mnt/repos/mirrors
+    with_items: "{{ repolist }}"
+
+  - name: Change Permissions
+    file: path=/mnt/repos/mirrors/{{ item }} state=directory mode=777 owner=nginx group=nginx recurse=yes
+    with_items: "{{ repolist }}"
+
+  - name: Create Repos
+    sudo_user: nginx
+    shell: createrepo --database --update . chdir=/mnt/repos/mirrors/{{ item }}
+    with_items: "{{ repolist }}"
+
+#lol lazy me - failsafe
+  - name: Change Permissions
+    file: path=/mnt/repos/mirrors state=directory mode=777 owner=nginx group=nginx recurse=yes
+
